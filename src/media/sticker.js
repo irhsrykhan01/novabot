@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 
-const exec = promisify(execFile);
+const exec = promisify(exec);
 
 function getMedia(message) {
   const msg = message.message;
@@ -46,33 +46,51 @@ async function downloadMedia(media) {
   return Buffer.concat(chunks);
 }
 
-async function convert(input, type, output) {
+async function convertImage(input, output) {
   const filter =
     "scale=512:512:force_original_aspect_ratio=decrease," +
     "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000";
 
-  const args = [
+  await exec("ffmpeg", [
     "-y",
     "-i",
     input,
     "-vf",
-    type === "video" ? `${filter},fps=15` : filter,
+    filter,
     "-c:v",
     "libwebp",
     "-quality",
     "80",
-    "-an",
+    "-frames:v",
+    "1",
+    output
+  ]);
+}
+
+async function convertVideo(input, output) {
+  const filter =
+    "scale=512:512:force_original_aspect_ratio=decrease," +
+    "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000";
+
+  await exec("ffmpeg", [
+    "-y",
+    "-i",
+    input,
+    "-t",
+    "6",
+    "-vf",
+    `${filter},fps=15`,
+    "-c:v",
+    "libwebp",
+    "-quality",
+    "70",
     "-loop",
-    "0"
-  ];
-
-  if (type === "video") {
-    args.push("-t", "6");
-  }
-
-  args.push(output);
-
-  await exec("ffmpeg", args);
+    "0",
+    "-an",
+    "-vsync",
+    "0",
+    output
+  ]);
 }
 
 export async function createSticker(message) {
@@ -97,7 +115,12 @@ export async function createSticker(message) {
     const buffer = await downloadMedia(media);
 
     await fs.writeFile(input, buffer);
-    await convert(input, media.type, output);
+
+    if (media.type === "image") {
+      await convertImage(input, output);
+    } else {
+      await convertVideo(input, output);
+    }
 
     return await fs.readFile(output);
   } finally {
