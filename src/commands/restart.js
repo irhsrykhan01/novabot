@@ -2,18 +2,36 @@ import config from "../config/index.js";
 
 export default {
   name: "restart",
-  category: "system",
+
+  category: "owner",
+
   description: "Restart NovaBot.",
 
-  async execute({ reply, jid }) {
-    const botNumber = config.bot.number.replace(/\D/g, "");
-    const sender = jid.split(":")[0].replace(/\D/g, "");
+  async execute({
+    reply,
+    jid
+  }) {
+    const botNumber =
+      config.bot.number.replace(
+        /\D/g,
+        ""
+      );
 
-    if (!botNumber || sender !== botNumber) {
+    const sender =
+      jid
+        .split(":")[0]
+        .replace(/\D/g, "");
+
+    if (
+      !botNumber ||
+      sender !== botNumber
+    ) {
       return;
     }
 
-    await reply("Restarting NovaBot...");
+    await reply(
+      "Restarting NovaBot..."
+    );
 
     setTimeout(() => {
       process.exit(0);
