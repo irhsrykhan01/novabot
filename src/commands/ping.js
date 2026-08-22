@@ -9,14 +9,7 @@ export default {
 
   description: "Check whether NovaBot is online.",
 
-  async execute({ message }) {
-    const jid = message.key.remoteJid;
-
-    await globalThis.novaBot.sendMessage(
-      jid,
-      {
-        text: "Pong!"
-      }
-    );
+  async execute({ reply }) {
+    await reply("Pong!");
   }
 };
