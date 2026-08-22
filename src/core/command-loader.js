@@ -7,10 +7,7 @@ import { logger } from "./logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const COMMANDS_PATH = path.resolve(
-  __dirname,
-  "../commands"
-);
+const COMMANDS_PATH = path.resolve(__dirname, "../commands");
 
 const commands = new Map();
 
@@ -28,10 +25,7 @@ export async function loadCommands() {
       continue;
     }
 
-    const filePath = path.join(
-      COMMANDS_PATH,
-      file
-    );
+    const filePath = path.join(COMMANDS_PATH, file);
 
     try {
       const module = await import(
@@ -40,19 +34,24 @@ export async function loadCommands() {
 
       const command = module.default;
 
-      if (!command?.name || typeof command.execute !== "function") {
-        logger.warn(
-          `Invalid command file: ${file}`
-        );
-
+      if (
+        !command?.name ||
+        typeof command.execute !== "function"
+      ) {
+        logger.warn(`Invalid command file: ${file}`);
         continue;
       }
 
-      registerCommand(command);
+      const names = [
+        command.name,
+        ...(command.aliases || [])
+      ];
 
-      logger.debug(
-        `Loaded command: ${command.name}`
-      );
+      for (const name of names) {
+        commands.set(name.toLowerCase(), command);
+      }
+
+      logger.debug(`Loaded command: ${command.name}`);
     } catch (error) {
       logger.error(
         `Failed to load command ${file}: ${error.message}`
@@ -60,31 +59,13 @@ export async function loadCommands() {
     }
   }
 
-  logger.info(
-    `Loaded ${commands.size} command(s).`
-  );
+  logger.info(`Loaded ${commands.size} command(s).`);
 
   return commands;
 }
 
-function registerCommand(command) {
-  const names = [
-    command.name,
-    ...(command.aliases || [])
-  ];
-
-  for (const name of names) {
-    commands.set(
-      name.toLowerCase(),
-      command
-    );
-  }
-}
-
 export function getCommand(name) {
-  return commands.get(
-    name.toLowerCase()
-  );
+  return commands.get(name.toLowerCase());
 }
 
 export function getCommands() {
