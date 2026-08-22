@@ -1,93 +1,36 @@
-import {
-  findChannelJid,
-  validateChannelAdmin,
-  setUserChannel,
-  getUserId
-} from "../../core/channel-publisher.js";
+// Command: .setchannel <ID_Channel>
+// Contoh: .setchannel 120363000000000000@newsletter
 
-import * as storage from "../../storage/index.js";
-
-export default {
-  name: "setchannel",
-
-  commands: [
-    {
-      name: "setchannel",
-
-      aliases: ["setch"],
-
-      category: "tools",
-
-      description:
-        "Menyimpan WhatsApp Channel untuk user.",
-
-      usage:
-        ".setchannel",
-
-      async execute({
-        message,
-        socket,
-        reply
-      }) {
-        const userId = getUserId(message);
-
-        if (!userId) {
-          await reply(
-            "❌ User tidak dapat dikenali."
-          );
-          return;
+module.exports = {
+    name: 'setchannel',
+    category: 'owner', // Sebaiknya cuma owner yang bisa atur ini
+    description: 'Mengatur target ID Channel untuk bot',
+    
+    async execute(sock, msg, args) {
+        const sender = msg.key.remoteJid;
+        
+        if (!args[0]) {
+            return sock.sendMessage(sender, { 
+                text: '⚠️ Format salah!\nKirim: *.setchannel 12345678@newsletter*' 
+            }, { quoted: msg });
         }
 
-        const channelJid =
-          findChannelJid(message);
-
-        if (!channelJid) {
-          await reply(
-            [
-              "❌ Channel tidak terdeteksi.",
-              "",
-              "Caranya:",
-              "1. Forward postingan dari Channel ke chat bot.",
-              "2. Reply postingan tersebut.",
-              "3. Kirim .setchannel"
-            ].join("\n")
-          );
-          return;
+        const channelId = args[0];
+        
+        // Validasi format JID Channel (harus berakhiran @newsletter)
+        if (!channelId.endsWith('@newsletter')) {
+            return sock.sendMessage(sender, { 
+                text: '⚠️ JID Channel tidak valid! Harus berakhiran @newsletter.' 
+            }, { quoted: msg });
         }
 
-        try {
-          const channel =
-            await validateChannelAdmin(
-              socket,
-              channelJid
-            );
+        // Simpan ke database/global variable kamu. 
+        // Sesuaikan bagian ini dengan sistem database Novabot kamu!
+        if (!global.db) global.db = {};
+        global.db.targetChannel = channelId;
 
-          await setUserChannel(
-            storage,
-            userId,
-            channel
-          );
-
-          await reply(
-            [
-              "✅ Channel berhasil disimpan!",
-              "",
-              `Channel: ${channel.name}`,
-              `Role: ${channel.role}`,
-              "",
-              "Sekarang reply pesan apa pun lalu gunakan .upch."
-            ].join("\n")
-          );
-        } catch (error) {
-          await reply(
-            [
-              "❌ Gagal menyimpan Channel.",
-              "",
-              `Penyebab: ${error.message}`
-            ].join("\n")
-          );
-        }
-      }
+        await sock.sendMessage(sender, { 
+            text: `✅ Sukses! ID Channel telah diatur ke:\n${channelId}` 
+        }, { quoted: msg });
     }
-  ]
 };
