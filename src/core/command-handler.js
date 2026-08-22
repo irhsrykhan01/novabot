@@ -2,27 +2,28 @@ import { getCommand } from "./command-loader.js";
 import { parseCommand } from "./command-parser.js";
 import { logger } from "./logger.js";
 
-export async function handleCommand(
-  message,
-  prefix,
-  socket
-) {
-  const text =
-    message.message?.conversation ||
-    message.message?.extendedTextMessage?.text ||
-    "";
+function getText(message) {
+  const msg = message.message;
 
+  return (
+    msg?.conversation ||
+    msg?.extendedTextMessage?.text ||
+    msg?.imageMessage?.caption ||
+    msg?.videoMessage?.caption ||
+    msg?.documentMessage?.caption ||
+    ""
+  );
+}
+
+export async function handleCommand(message, prefix, socket) {
+  const text = getText(message);
   const parsed = parseCommand(text, prefix);
 
-  if (!parsed) {
-    return false;
-  }
+  if (!parsed) return false;
 
   const command = getCommand(parsed.command);
 
-  if (!command) {
-    return false;
-  }
+  if (!command) return false;
 
   const jid = message.key.remoteJid;
 
@@ -35,15 +36,12 @@ export async function handleCommand(
     jid,
 
     async reply(text) {
-      return socket.sendMessage(jid, {
-        text
-      });
+      return socket.sendMessage(jid, { text });
     }
   };
 
   try {
     await command.execute(context);
-    return true;
   } catch (error) {
     logger.error(
       `Command "${parsed.command}" failed: ${error.message}`
@@ -52,7 +50,7 @@ export async function handleCommand(
     await context.reply(
       "Terjadi kesalahan saat menjalankan command."
     );
-
-    return true;
   }
-}
+
+  return true;
+                          }
