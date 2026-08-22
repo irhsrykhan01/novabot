@@ -13,39 +13,23 @@ export default {
   commands: [
     {
       name: "upch",
-
-      aliases: [
-        "uploadch"
-      ],
-
+      aliases: ["uploadch"],
       category: "tools",
+      description: "Mengirim pesan ke Channel yang tersimpan.",
+      usage: ".upch",
 
-      description:
-        "Mengirim pesan ke Channel yang tersimpan.",
-
-      async execute({
-        message,
-        socket,
-        reply
-      }) {
-        const userId =
-          getUserId(
-            message
-          );
+      async execute({ message, socket, reply }) {
+        const userId = getUserId(message);
 
         if (!userId) {
-          await reply(
-            "❌ User tidak dapat dikenali."
-          );
-
+          await reply("❌ User tidak dapat dikenali.");
           return;
         }
 
-        const channel =
-          await getUserChannel(
-            storage,
-            userId
-          );
+        const channel = getUserChannel(
+          storage,
+          userId
+        );
 
         if (!channel) {
           await reply(
@@ -56,45 +40,37 @@ export default {
               ".setchannel"
             ].join("\n")
           );
-
           return;
         }
 
-        const source =
-          getSourceMessage(
-            message
-          );
+        const source = getSourceMessage(message);
 
         if (!source) {
           await reply(
             [
-              "❌ Tidak ada pesan yang akan di-upload.",
+              "❌ Tidak ada pesan yang akan dikirim.",
               "",
-              "Reply pesan yang mau dikirim lalu:",
+              "Reply pesan yang ingin dikirim lalu:",
               ".upch"
             ].join("\n")
           );
-
           return;
         }
 
         try {
-          const result =
-            await publishMessage(
-              socket,
-              channel.jid,
-              source
-            );
+          const result = await publishMessage(
+            socket,
+            channel.jid,
+            source
+          );
 
           await reply(
             [
-              "✅ Pesan diterima WhatsApp untuk dikirim ke Channel.",
+              "✅ Pesan berhasil dikirim.",
               "",
-              `Channel : ${channel.name}`,
-              `Tipe    : ${result.type}`,
-              `ID      : ${result.messageId}`,
-              "",
-              "Catatan: ID ini berarti server WhatsApp menerima permintaan pengiriman; tampilan akhir di Channel tetap bergantung pada server/newsletter."
+              `Channel: ${channel.name}`,
+              `Tipe: ${result.type}`,
+              `ID: ${result.messageId}`
             ].join("\n")
           );
         } catch (error) {
