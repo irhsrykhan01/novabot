@@ -117,8 +117,54 @@ async function videoToSticker(input, output) {
   );
 }
 
-export async function createSticker(message) {
-  const media = getMessageMedia(message);
+async function convertBufferToSticker(
+  buffer,
+  extension = "png"
+) {
+  const tempDir = await fs.mkdtemp(
+    path.join(
+      os.tmpdir(),
+      "novabot-sticker-"
+    )
+  );
+
+  const inputPath = path.join(
+    tempDir,
+    `input.${extension}`
+  );
+
+  const outputPath = path.join(
+    tempDir,
+    "sticker.webp"
+  );
+
+  try {
+    await fs.writeFile(
+      inputPath,
+      buffer
+    );
+
+    await imageToSticker(
+      inputPath,
+      outputPath
+    );
+
+    return await fs.readFile(
+      outputPath
+    );
+  } finally {
+    await fs.rm(tempDir, {
+      recursive: true,
+      force: true
+    });
+  }
+}
+
+export async function createSticker(
+  message
+) {
+  const media =
+    getMessageMedia(message);
 
   if (!media) {
     throw new Error(
@@ -146,10 +192,11 @@ export async function createSticker(message) {
   );
 
   try {
-    const buffer = await downloadMedia(
-      media.media,
-      media.type
-    );
+    const buffer =
+      await downloadMedia(
+        media.media,
+        media.type
+      );
 
     await fs.writeFile(
       inputPath,
@@ -177,4 +224,26 @@ export async function createSticker(message) {
       force: true
     });
   }
-      }
+}
+
+export async function createStickerFromBuffer(
+  buffer,
+  extension = "png"
+) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new TypeError(
+      "Sticker input harus berupa Buffer."
+    );
+  }
+
+  if (buffer.length === 0) {
+    throw new Error(
+      "Buffer sticker kosong."
+    );
+  }
+
+  return convertBufferToSticker(
+    buffer,
+    extension
+  );
+}
