@@ -12,18 +12,13 @@ export async function handleCommand(
     message.message?.extendedTextMessage?.text ||
     "";
 
-  const parsed = parseCommand(
-    text,
-    prefix
-  );
+  const parsed = parseCommand(text, prefix);
 
   if (!parsed) {
     return false;
   }
 
-  const command = getCommand(
-    parsed.command
-  );
+  const command = getCommand(parsed.command);
 
   if (!command) {
     return false;
@@ -34,11 +29,9 @@ export async function handleCommand(
   const context = {
     message,
     socket,
-
     command: parsed.command,
     args: parsed.args,
     raw: parsed.raw,
-
     jid,
 
     async reply(text) {
@@ -50,7 +43,6 @@ export async function handleCommand(
 
   try {
     await command.execute(context);
-
     return true;
   } catch (error) {
     logger.error(
