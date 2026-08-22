@@ -1,4 +1,7 @@
-import { createSticker } from "../../media/sticker.js";
+import {
+  createSticker,
+  getStickerMetadata
+} from "../../media/sticker.js";
 
 export default {
   name: "sticker",
@@ -6,9 +9,13 @@ export default {
   commands: [
     {
       name: "sticker",
+
       aliases: ["s"],
+
       category: "media",
-      description: "Membuat sticker dari gambar atau video",
+
+      description:
+        "Membuat sticker dari gambar atau video",
 
       async execute({
         message,
@@ -17,14 +24,18 @@ export default {
         reply
       }) {
         try {
-          const sticker = await createSticker(
-            message
-          );
+          const sticker =
+            await createSticker(message);
+
+          const metadata =
+            await getStickerMetadata();
 
           await socket.sendMessage(
             jid,
             {
-              sticker
+              sticker,
+              packname: metadata.pack,
+              author: metadata.author
             }
           );
         } catch (error) {
