@@ -1,88 +1,55 @@
-import {
-  getUserId,
-  getSourceMessage,
-  getUserChannel,
-  publishMessage
-} from "../../core/channel-publisher.js";
+// Command: .upch (sambil me-reply pesan yang mau dikirim)
+const { publishToChannel } = require('../../core/channel-publisher');
 
-import * as storage from "../../storage/index.js";
-
-export default {
-  name: "upch",
-
-  commands: [
-    {
-      name: "upch",
-      aliases: ["uploadch"],
-      category: "tools",
-      description: "Mengirim pesan ke Channel yang tersimpan.",
-      usage: ".upch",
-
-      async execute({ message, socket, reply }) {
-        const userId = getUserId(message);
-
-        if (!userId) {
-          await reply("❌ User tidak dapat dikenali.");
-          return;
+module.exports = {
+    name: 'upch',
+    category: 'owner',
+    description: 'Meneruskan pesan yang di-reply ke Channel',
+    
+    async execute(sock, msg, args) {
+        const sender = msg.key.remoteJid;
+        
+        // Ambil target channel dari database yang diset oleh plugin setchannel
+        const targetChannel = global.db?.targetChannel; 
+        
+        if (!targetChannel) {
+            return sock.sendMessage(sender, { 
+                text: '⚠️ ID Channel belum diatur! Gunakan perintah *.setchannel* terlebih dahulu.' 
+            }, { quoted: msg });
         }
 
-        const channel = getUserChannel(
-          storage,
-          userId
-        );
-
-        if (!channel) {
-          await reply(
-            [
-              "❌ Belum ada Channel tujuan.",
-              "",
-              "Reply postingan dari Channel lalu gunakan:",
-              ".setchannel"
-            ].join("\n")
-          );
-          return;
-        }
-
-        const source = getSourceMessage(message);
-
-        if (!source) {
-          await reply(
-            [
-              "❌ Tidak ada pesan yang akan dikirim.",
-              "",
-              "Reply pesan yang ingin dikirim lalu:",
-              ".upch"
-            ].join("\n")
-          );
-          return;
+        // Cek apakah user menggunakan command ini sambil me-reply sebuah pesan
+        const isQuoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        
+        if (!isQuoted) {
+            return sock.sendMessage(sender, { 
+                text: '⚠️ Reply pesan (teks/media) yang ingin kamu kirim ke Channel, lalu ketik *.upch*' 
+            }, { quoted: msg });
         }
 
         try {
-          const result = await publishMessage(
-            socket,
-            channel.jid,
-            source
-          );
+            await sock.sendMessage(sender, { text: '⏳ Sedang memproses dan mengunggah ke Channel...' });
 
-          await reply(
-            [
-              "✅ Pesan berhasil dikirim.",
-              "",
-              `Channel: ${channel.name}`,
-              `Tipe: ${result.type}`,
-              `ID: ${result.messageId}`
-            ].join("\n")
-          );
+            // Rekonstruksi struktur pesan yang di-reply agar menyerupai object pesan asli
+            // Ini dibutuhkan oleh fungsi downloadMediaMessage di Baileys
+            const quotedMsgObj = {
+                key: {
+                    remoteJid: msg.key.remoteJid,
+                    id: msg.message.extendedTextMessage.contextInfo.stanzaId
+                },
+                message: isQuoted
+            };
+
+            // Kirim pesan tiruan tersebut ke mesin publisher kita
+            await publishToChannel(sock, quotedMsgObj, targetChannel);
+
+            await sock.sendMessage(sender, { text: '✅ Pesan berhasil dipublish ke Channel!' });
+
         } catch (error) {
-          await reply(
-            [
-              "❌ Gagal mengirim ke Channel.",
-              "",
-              `Penyebab: ${error.message}`
-            ].join("\n")
-          );
+            console.error('Error saat upch:', error);
+            await sock.sendMessage(sender, { 
+                text: '❌ Gagal mengirim ke channel. Cek log terminal (kemungkinan file corrupt atau timeout dari server WA).' 
+            }, { quoted: msg });
         }
-      }
     }
-  ]
 };
