@@ -1,9 +1,14 @@
+const isDevelopment =
+  process.env.NODE_ENV === "development";
+
 function timestamp() {
   return new Date().toISOString();
 }
 
 function write(level, message) {
-  console.log(`[${timestamp()}] [${level}] ${message}`);
+  console.log(
+    `[${timestamp()}] [${level}] ${message}`
+  );
 }
 
 export const logger = {
@@ -20,7 +25,7 @@ export const logger = {
   },
 
   debug(message) {
-    if (process.env.NODE_ENV === "development") {
+    if (isDevelopment) {
       write("DEBUG", message);
     }
   }
