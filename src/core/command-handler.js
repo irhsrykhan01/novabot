@@ -3,16 +3,20 @@ import { parseCommand } from "./command-parser.js";
 import { logger } from "./logger.js";
 
 function getText(message) {
-  const msg = message.message;
+  const msg = message?.message;
+
+  if (!msg) {
+    return "";
+  }
 
   return (
-    msg?.conversation ||
-    msg?.extendedTextMessage?.text ||
-    msg?.imageMessage?.caption ||
-    msg?.videoMessage?.caption ||
-    msg?.documentMessage?.caption ||
+    msg.conversation ||
+    msg.extendedTextMessage?.text ||
+    msg.imageMessage?.caption ||
+    msg.videoMessage?.caption ||
+    msg.documentMessage?.caption ||
     ""
-  );
+  ).trim();
 }
 
 async function react(socket, key, text) {
@@ -24,31 +28,64 @@ async function react(socket, key, text) {
       }
     });
   } catch (error) {
-    logger.warn(`Failed to send reaction: ${error.message}`);
+    logger.warn(
+      `Failed to send reaction "${text}": ${error.message}`
+    );
+  }
+}
+
+async function markAsRead(socket, key) {
+  try {
+    await socket.readMessages([key]);
+  } catch (error) {
+    logger.warn(
+      `Failed to mark message as read: ${error.message}`
+    );
   }
 }
 
 export async function handleCommand(message, prefix, socket) {
+  const jid = message?.key?.remoteJid;
+
+  if (!jid) {
+    return false;
+  }
+
   const text = getText(message);
+
+  logger.debug(
+    `Command text: ${JSON.stringify(text)}`
+  );
+
   const parsed = parseCommand(text, prefix);
 
-  if (!parsed) return false;
+  if (!parsed) {
+    return false;
+  }
+
+  logger.debug(
+    `Parsed command: ${parsed.command}`
+  );
+
+  // Pesan command sudah dikenali.
+  await markAsRead(socket, message.key);
+  await react(socket, message.key, "⏳");
 
   const command = getCommand(parsed.command);
 
-  if (!command) return false;
+  if (!command) {
+    logger.debug(
+      `Command not found: ${parsed.command}`
+    );
 
-  const jid = message.key.remoteJid;
+    await react(socket, message.key, "❌");
 
-  // Mark message as read
-  try {
-    await socket.readMessages([message.key]);
-  } catch (error) {
-    logger.warn(`Failed to mark message as read: ${error.message}`);
+    await socket.sendMessage(jid, {
+      text: `Command "${parsed.command}" tidak ditemukan.`
+    });
+
+    return false;
   }
-
-  // Processing
-  await react(socket, message.key, "⏳");
 
   const context = {
     message,
@@ -59,7 +96,9 @@ export async function handleCommand(message, prefix, socket) {
     jid,
 
     async reply(text) {
-      return socket.sendMessage(jid, { text });
+      return socket.sendMessage(jid, {
+        text
+      });
     }
   };
 
@@ -67,6 +106,8 @@ export async function handleCommand(message, prefix, socket) {
     await command.execute(context);
 
     await react(socket, message.key, "✅");
+
+    return true;
   } catch (error) {
     logger.error(
       `Command "${parsed.command}" failed: ${error.message}`
@@ -75,9 +116,9 @@ export async function handleCommand(message, prefix, socket) {
     await react(socket, message.key, "❌");
 
     await context.reply(
-      "Terjadi kesalahan saat menjalankan command."
+      `Command "${parsed.command}" gagal: ${error.message}`
     );
-  }
 
-  return true;
-    }
+    return true;
+  }
+}
