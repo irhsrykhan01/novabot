@@ -1,3 +1,5 @@
+import { createStickerFromBuffer } from "../../media/sticker.js";
+
 const API_URL = "https://depay.cloud/api/generator/brat";
 
 async function generateBrat(text) {
@@ -37,7 +39,7 @@ export default {
       name: "brat",
       aliases: [],
       category: "maker",
-      description: "Membuat gambar Brat dari teks.",
+      description: "Membuat sticker Brat dari teks.",
 
       async execute({
         args,
@@ -56,11 +58,16 @@ export default {
         }
 
         try {
-          const image = await generateBrat(text);
+          const imageBuffer =
+            await generateBrat(text);
+
+          const sticker =
+            await createStickerFromBuffer(
+              imageBuffer
+            );
 
           await socket.sendMessage(jid, {
-            image,
-            caption: `Brat: ${text}`
+            sticker
           });
         } catch (error) {
           await reply(
