@@ -1,27 +1,53 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-
-import {
-  downloadContentFromMessage
-} from "@whiskeysockets/baileys";
+import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 
 const exec = promisify(execFile);
 
-async function downloadMedia(message) {
-  const type = message.imageMessage
-    ? "image"
-    : message.videoMessage
-      ? "video"
-      : null;
+function getSource(message) {
+  const msg = message.message;
 
-  if (!type) return null;
+  if (msg?.imageMessage) {
+    return {
+      data: msg.imageMessage,
+      type: "image"
+    };
+  }
 
-  const media = message[`${type}Message`];
-  const stream = await downloadContentFromMessage(media, type);
+  if (msg?.videoMessage) {
+    return {
+      data: msg.videoMessage,
+      type: "video"
+    };
+  }
+
+  const quoted = msg?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+  if (quoted?.imageMessage) {
+    return {
+      data: quoted.imageMessage,
+      type: "image"
+    };
+  }
+
+  if (quoted?.videoMessage) {
+    return {
+      data: quoted.videoMessage,
+      type: "video"
+    };
+  }
+
+  return null;
+}
+
+async function downloadMedia(source) {
+  const stream = await downloadContentFromMessage(
+    source.data,
+    source.type
+  );
 
   const chunks = [];
 
@@ -43,42 +69,37 @@ export default {
       description: "Mengubah gambar atau video menjadi sticker.",
 
       async execute({ message, reply, socket, jid }) {
-        const quoted =
-          message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-
-        const source =
-          message.message?.imageMessage ||
-          message.message?.videoMessage ||
-          quoted?.imageMessage ||
-          quoted?.videoMessage;
+        const source = getSource(message);
 
         if (!source) {
           return reply(
-            "Kirim gambar/video dengan caption .sticker atau reply media dengan .sticker."
+            "Kirim atau reply gambar/video dengan .sticker"
           );
         }
 
-        const type = source.imageMessage
-          ? "image"
-          : "video";
+        let input;
 
-        const fakeMessage = {
-          [type === "image" ? "imageMessage" : "videoMessage"]: source
-        };
-
-        const input = await downloadMedia(fakeMessage);
-
-        if (!input) {
-          return reply("Media tidak bisa diproses.");
+        try {
+          input = await downloadMedia(source);
+        } catch (error) {
+          return reply(
+            `Media gagal diunduh: ${error.message}`
+          );
         }
 
-        const id = crypto.randomBytes(6).toString("hex");
         const dir = await fs.mkdtemp(
           path.join(os.tmpdir(), "novabot-")
         );
 
-        const inputPath = path.join(dir, `input.${type === "image" ? "jpg" : "mp4"}`);
-        const outputPath = path.join(dir, "sticker.webp");
+        const inputPath = path.join(
+          dir,
+          source.type === "image" ? "input.jpg" : "input.mp4"
+        );
+
+        const outputPath = path.join(
+          dir,
+          "sticker.webp"
+        );
 
         try {
           await fs.writeFile(inputPath, input);
@@ -103,20 +124,15 @@ export default {
           await socket.sendMessage(jid, {
             sticker
           });
-
-          await fs.rm(dir, {
-            recursive: true,
-            force: true
-          });
         } catch (error) {
-          await fs.rm(dir, {
-            recursive: true,
-            force: true
-          });
-
           await reply(
             `Sticker gagal dibuat: ${error.message}`
           );
+        } finally {
+          await fs.rm(dir, {
+            recursive: true,
+            force: true
+          });
         }
       }
     }
