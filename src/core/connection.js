@@ -90,6 +90,17 @@ async function handleConnectionUpdate(update) {
 
   if (connection === "open") {
     logger.info("WhatsApp connection opened.");
+
+    try {
+      await socket.sendPresenceUpdate("available");
+
+      logger.info("NovaBot presence: online.");
+    } catch (error) {
+      logger.warn(
+        `Failed to set online presence: ${error.message}`
+      );
+    }
+
     logger.info("NovaBot is online.");
 
     return;
