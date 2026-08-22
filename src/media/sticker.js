@@ -46,40 +46,39 @@ async function downloadMedia(media) {
   return Buffer.concat(chunks);
 }
 
-async function convertImage(input, output) {
-  const filter =
-    "scale=512:512:force_original_aspect_ratio=decrease," +
-    "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000";
+async function runFFmpeg(args) {
+  return exec("ffmpeg", args, {
+    timeout: 30000,
+    maxBuffer: 10 * 1024 * 1024
+  });
+}
 
-  await exec("ffmpeg", [
+async function convertImage(input, output) {
+  await runFFmpeg([
     "-y",
     "-i",
     input,
     "-vf",
-    filter,
+    "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+    "-frames:v",
+    "1",
     "-c:v",
     "libwebp",
     "-quality",
     "80",
-    "-frames:v",
-    "1",
     output
   ]);
 }
 
 async function convertVideo(input, output) {
-  const filter =
-    "scale=512:512:force_original_aspect_ratio=decrease," +
-    "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000";
-
-  await exec("ffmpeg", [
+  await runFFmpeg([
     "-y",
     "-i",
     input,
     "-t",
     "6",
     "-vf",
-    `${filter},fps=15`,
+    "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=15",
     "-c:v",
     "libwebp",
     "-quality",
@@ -87,8 +86,6 @@ async function convertVideo(input, output) {
     "-loop",
     "0",
     "-an",
-    "-vsync",
-    "0",
     output
   ]);
 }
@@ -129,4 +126,4 @@ export async function createSticker(message) {
       force: true
     });
   }
-}
+                         }
