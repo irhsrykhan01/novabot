@@ -1,13 +1,8 @@
 export default {
   name: "ping",
-
-  aliases: [
-    "p"
-  ],
-
-  category: "general",
-
-  description: "Check whether NovaBot is online.",
+  aliases: ["p"],
+  category: "system",
+  description: "Mengecek apakah NovaBot aktif.",
 
   async execute({ reply }) {
     await reply("Pong!");
