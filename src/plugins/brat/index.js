@@ -1,6 +1,6 @@
 import { createStickerFromBuffer } from "../../media/sticker.js";
 
-const BRAT_API = "https://api.depay.id/brat";
+const BRAT_API = "https://depay.cloud/api/generator/brat";
 
 async function fetchBratImage(text) {
   const url =
