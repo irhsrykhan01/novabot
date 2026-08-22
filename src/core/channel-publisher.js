@@ -5,43 +5,95 @@ import {
 } from "@whiskeysockets/baileys";
 
 const CHANNEL_SUFFIX = "@newsletter";
+const SEND_TIMEOUT_MS = 45_000;
 
 const channelQueues = new Map();
 
-function isNewsletterJid(jid) {
+function isChannelJid(jid) {
   return (
     typeof jid === "string" &&
     jid.endsWith(CHANNEL_SUFFIX)
   );
 }
 
-function getUserId(message) {
-  return (
-    message?.key?.participant ||
-    message?.key?.remoteJid ||
-    null
-  );
-}
-
-function getContextInfo(messageContent) {
-  if (!messageContent) {
+function normalizeUserId(jid) {
+  if (
+    typeof jid !== "string" ||
+    !jid
+  ) {
     return null;
   }
 
+  return jid;
+}
+
+export function getUserId(message) {
+  /*
+   * Di private chat:
+   * remoteJid = user.
+   *
+   * Di group:
+   * participant = user.
+   *
+   * Di Channel:
+   * remoteJid = channel.
+   * participant dipakai kalau tersedia.
+   */
+  const participant =
+    normalizeUserId(
+      message?.key?.participant
+    );
+
+  if (
+    participant &&
+    !isChannelJid(participant) &&
+    !participant.endsWith("@g.us")
+  ) {
+    return participant;
+  }
+
+  const remoteJid =
+    normalizeUserId(
+      message?.key?.remoteJid
+    );
+
+  if (
+    remoteJid &&
+    !isChannelJid(remoteJid)
+  ) {
+    return remoteJid;
+  }
+
+  return null;
+}
+
+function getMessageType(content) {
+  if (!content) {
+    return null;
+  }
+
+  try {
+    return getContentType(content);
+  } catch {
+    return null;
+  }
+}
+
+function getContextInfo(content) {
   const type =
-    getContentType(messageContent);
+    getMessageType(content);
 
   if (!type) {
     return null;
   }
 
-  const content =
-    messageContent[type];
-
-  return content?.contextInfo || null;
+  return (
+    content?.[type]?.contextInfo ||
+    null
+  );
 }
 
-function findNewsletterJidInContent(
+function findNewsletterJid(
   content
 ) {
   if (!content) {
@@ -49,26 +101,33 @@ function findNewsletterJidInContent(
   }
 
   const normalized =
-    normalizeMessageContent(content) ||
-    content;
+    normalizeMessageContent(
+      content
+    ) || content;
 
   const context =
-    getContextInfo(normalized);
+    getContextInfo(
+      normalized
+    );
 
-  const forwarded =
+  const forwardedJid =
     context
       ?.forwardedNewsletterMessageInfo
       ?.newsletterJid;
 
-  if (isNewsletterJid(forwarded)) {
-    return forwarded;
+  if (
+    isChannelJid(
+      forwardedJid
+    )
+  ) {
+    return forwardedJid;
   }
 
   const contextRemoteJid =
     context?.remoteJid;
 
   if (
-    isNewsletterJid(
+    isChannelJid(
       contextRemoteJid
     )
   ) {
@@ -76,28 +135,23 @@ function findNewsletterJidInContent(
   }
 
   const type =
-    getContentType(normalized);
+    getMessageType(
+      normalized
+    );
 
   if (!type) {
     return null;
   }
 
-  const inner =
-    normalized[type];
-
-  const nestedQuoted =
-    inner?.contextInfo
+  const nested =
+    normalized?.[type]
+      ?.contextInfo
       ?.quotedMessage;
 
-  if (nestedQuoted) {
-    const nestedResult =
-      findNewsletterJidInContent(
-        nestedQuoted
-      );
-
-    if (nestedResult) {
-      return nestedResult;
-    }
+  if (nested) {
+    return findNewsletterJid(
+      nested
+    );
   }
 
   return null;
@@ -106,46 +160,20 @@ function findNewsletterJidInContent(
 export function findChannelJid(
   message
 ) {
-  const directJid =
+  const direct =
     message?.key?.remoteJid;
 
-  if (isNewsletterJid(directJid)) {
-    return directJid;
+  if (isChannelJid(direct)) {
+    return direct;
   }
 
-  const current =
-    findNewsletterJidInContent(
+  const fromMessage =
+    findNewsletterJid(
       message?.message
     );
 
-  if (current) {
-    return current;
-  }
-
-  const type =
-    getContentType(
-      message?.message
-    );
-
-  const currentContent =
-    type
-      ? message?.message?.[type]
-      : null;
-
-  const quoted =
-    currentContent
-      ?.contextInfo
-      ?.quotedMessage;
-
-  if (quoted) {
-    const quotedJid =
-      findNewsletterJidInContent(
-        quoted
-      );
-
-    if (quotedJid) {
-      return quotedJid;
-    }
+  if (fromMessage) {
+    return fromMessage;
   }
 
   return null;
@@ -156,12 +184,22 @@ export async function inspectChannel(
   channelJid
 ) {
   if (
-    !isNewsletterJid(
+    !isChannelJid(
       channelJid
     )
   ) {
     throw new Error(
       "Target bukan WhatsApp Channel."
+    );
+  }
+
+  if (
+    !socket ||
+    typeof socket.newsletterMetadata !==
+      "function"
+  ) {
+    throw new Error(
+      "Baileys pada versi ini tidak menyediakan newsletterMetadata()."
     );
   }
 
@@ -178,18 +216,30 @@ export async function inspectChannel(
   }
 
   const role =
-    metadata?.viewer_metadata?.role ||
-    metadata?.viewerMetadata?.role ||
+    metadata
+      ?.viewer_metadata
+      ?.role ||
+    metadata
+      ?.viewerMetadata
+      ?.role ||
     metadata?.role ||
     null;
 
+  const name =
+    metadata?.name ||
+    metadata
+      ?.thread_metadata
+      ?.name ||
+    metadata
+      ?.threadMetadata
+      ?.name ||
+    "WhatsApp Channel";
+
   return {
     jid: channelJid,
-    name:
-      metadata?.name ||
-      metadata?.thread_metadata?.name ||
-      "WhatsApp Channel",
-    role
+    name,
+    role,
+    raw: metadata
   };
 }
 
@@ -208,9 +258,10 @@ export async function validateChannelAdmin(
     channel.role !== "OWNER"
   ) {
     throw new Error(
-      `NovaBot belum menjadi admin Channel ini. Role saat ini: ${
-        channel.role || "UNKNOWN"
-      }`
+      [
+        "NovaBot tidak memiliki izin posting di Channel ini.",
+        `Role bot: ${channel.role || "UNKNOWN"}`
+      ].join("\n")
     );
   }
 
@@ -226,14 +277,16 @@ export async function getUserChannel(
   }
 
   const user =
-    storage.getUser(userId);
+    storage.getUser(
+      userId
+    );
 
   const channel =
     user?.upchChannel;
 
   if (
     !channel?.jid ||
-    !isNewsletterJid(
+    !isChannelJid(
       channel.jid
     )
   ) {
@@ -272,7 +325,7 @@ export async function setUserChannel(
   );
 }
 
-function getSourceMessage(
+function getQuotedMessage(
   message
 ) {
   const normalized =
@@ -286,29 +339,54 @@ function getSourceMessage(
   }
 
   const type =
-    getContentType(normalized);
+    getMessageType(
+      normalized
+    );
 
   if (!type) {
     return null;
   }
 
-  const content =
-    normalized[type];
+  const quoted =
+    normalized?.[type]
+      ?.contextInfo
+      ?.quotedMessage;
 
-  const context =
-    content?.contextInfo;
+  return quoted || null;
+}
 
-  if (
-    context?.quotedMessage
-  ) {
-    return context.quotedMessage;
+export function getSourceMessage(
+  message
+) {
+  const quoted =
+    getQuotedMessage(
+      message
+    );
+
+  if (quoted) {
+    return quoted;
   }
 
   /*
-   * Jika command .upch dikirim langsung
-   * pada media dengan caption .upch,
-   * gunakan media tersebut.
+   * Mendukung:
+   * foto/video/audio/document/sticker
+   * dengan caption .upch langsung.
    */
+  const normalized =
+    normalizeMessageContent(
+      message?.message
+    ) ||
+    message?.message;
+
+  if (!normalized) {
+    return null;
+  }
+
+  const type =
+    getMessageType(
+      normalized
+    );
+
   if (
     type === "imageMessage" ||
     type === "videoMessage" ||
@@ -317,44 +395,6 @@ function getSourceMessage(
     type === "stickerMessage"
   ) {
     return normalized;
-  }
-
-  return null;
-}
-
-function getTextContent(
-  source
-) {
-  const normalized =
-    normalizeMessageContent(
-      source
-    ) || source;
-
-  if (!normalized) {
-    return null;
-  }
-
-  if (
-    typeof normalized.conversation ===
-    "string"
-  ) {
-    return {
-      text: normalized.conversation
-    };
-  }
-
-  if (
-    typeof normalized
-      .extendedTextMessage
-      ?.text ===
-    "string"
-  ) {
-    return {
-      text:
-        normalized
-          .extendedTextMessage
-          .text
-    };
   }
 
   return null;
@@ -396,6 +436,43 @@ async function downloadMediaBuffer(
   return buffer;
 }
 
+function getTextPayload(
+  source
+) {
+  const normalized =
+    normalizeMessageContent(
+      source
+    ) || source;
+
+  if (
+    typeof normalized
+      ?.conversation ===
+    "string"
+  ) {
+    return {
+      text:
+        normalized.conversation
+    };
+  }
+
+  const extendedText =
+    normalized
+      ?.extendedTextMessage
+      ?.text;
+
+  if (
+    typeof extendedText ===
+    "string"
+  ) {
+    return {
+      text:
+        extendedText
+    };
+  }
+
+  return null;
+}
+
 async function buildPayload(
   source
 ) {
@@ -404,22 +481,26 @@ async function buildPayload(
       source
     ) || source;
 
-  const text =
-    getTextContent(
+  if (!normalized) {
+    throw new Error(
+      "Pesan sumber tidak valid."
+    );
+  }
+
+  const textPayload =
+    getTextPayload(
       normalized
     );
 
-  if (text) {
+  if (textPayload) {
     return {
       type: "text",
-      content: {
-        text: text.text
-      }
+      content: textPayload
     };
   }
 
   if (
-    normalized?.imageMessage
+    normalized.imageMessage
   ) {
     const media =
       normalized.imageMessage;
@@ -435,16 +516,20 @@ async function buildPayload(
       content: {
         image: buffer,
         mimetype:
-          media.mimetype,
-        caption:
-          media.caption ||
-          undefined
+          media.mimetype ||
+          "image/jpeg",
+        ...(media.caption
+          ? {
+              caption:
+                media.caption
+            }
+          : {})
       }
     };
   }
 
   if (
-    normalized?.videoMessage
+    normalized.videoMessage
   ) {
     const media =
       normalized.videoMessage;
@@ -460,20 +545,25 @@ async function buildPayload(
       content: {
         video: buffer,
         mimetype:
-          media.mimetype,
-        caption:
-          media.caption ||
-          undefined,
-        gifPlayback:
-          Boolean(
-            media.gifPlayback
-          )
+          media.mimetype ||
+          "video/mp4",
+        ...(media.caption
+          ? {
+              caption:
+                media.caption
+            }
+          : {}),
+        ...(media.gifPlayback
+          ? {
+              gifPlayback: true
+            }
+          : {})
       }
     };
   }
 
   if (
-    normalized?.audioMessage
+    normalized.audioMessage
   ) {
     const media =
       normalized.audioMessage;
@@ -498,7 +588,7 @@ async function buildPayload(
   }
 
   if (
-    normalized?.documentMessage
+    normalized.documentMessage
   ) {
     const media =
       normalized.documentMessage;
@@ -519,15 +609,18 @@ async function buildPayload(
         fileName:
           media.fileName ||
           "file",
-        caption:
-          media.caption ||
-          undefined
+        ...(media.caption
+          ? {
+              caption:
+                media.caption
+            }
+          : {})
       }
     };
   }
 
   if (
-    normalized?.stickerMessage
+    normalized.stickerMessage
   ) {
     const media =
       normalized.stickerMessage;
@@ -551,14 +644,43 @@ async function buildPayload(
   );
 }
 
-async function sendQueued(
+function withTimeout(
+  promise,
+  timeoutMs
+) {
+  return Promise.race([
+    promise,
+
+    new Promise(
+      (_, reject) => {
+        const timer =
+          setTimeout(() => {
+            reject(
+              new Error(
+                `Pengiriman melebihi batas waktu ${Math.round(
+                  timeoutMs / 1000
+                )} detik.`
+              )
+            );
+          }, timeoutMs);
+
+        promise.finally(
+          () => clearTimeout(timer)
+        );
+      }
+    )
+  ]);
+}
+
+function enqueueChannelSend(
   channelJid,
   task
 ) {
   const previous =
     channelQueues.get(
       channelJid
-    ) || Promise.resolve();
+    ) ||
+    Promise.resolve();
 
   const next =
     previous
@@ -567,18 +689,20 @@ async function sendQueued(
 
   channelQueues.set(
     channelJid,
-    next.finally(() => {
-      if (
-        channelQueues.get(
-          channelJid
-        ) === next
-      ) {
-        channelQueues.delete(
-          channelJid
-        );
-      }
-    })
+    next
   );
+
+  next.finally(() => {
+    if (
+      channelQueues.get(
+        channelJid
+      ) === next
+    ) {
+      channelQueues.delete(
+        channelJid
+      );
+    }
+  });
 
   return next;
 }
@@ -588,23 +712,34 @@ export async function publishMessage(
   channelJid,
   sourceMessage
 ) {
+  if (
+    !socket ||
+    typeof socket.sendMessage !==
+      "function"
+  ) {
+    throw new Error(
+      "WhatsApp socket tidak tersedia."
+    );
+  }
+
+  if (
+    !isChannelJid(
+      channelJid
+    )
+  ) {
+    throw new Error(
+      "Target Channel tidak valid."
+    );
+  }
+
   const payload =
     await buildPayload(
       sourceMessage
     );
 
-  return sendQueued(
-    channelJid,
-    async () => {
-      return socket.sendMessage(
-        channelJid,
-        payload.content
-      );
-    }
-  );
-}
-
-export {
-  getUserId,
-  getSourceMessage
-};
+  const sent =
+    await enqueueChannelSend(
+      channelJid,
+      () =>
+        withTimeout(
+          socket
