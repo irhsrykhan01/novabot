@@ -1,8 +1,11 @@
-import { createStickerFromBuffer } from "../../media/sticker.js";
+import {
+  createStickerFromBuffer
+} from "../../media/sticker.js";
 
-const API_URL = "https://depay.cloud/api/generator/brat";
+const API_URL =
+  "https://depay.cloud/api/generator/brat";
 
-async function generateBrat(text) {
+async function generateBratImage(text) {
   const url = new URL(API_URL);
 
   url.searchParams.set("text", text);
@@ -11,7 +14,7 @@ async function generateBrat(text) {
 
   if (!response.ok) {
     throw new Error(
-      `Brat API HTTP ${response.status}`
+      `Brat API error: HTTP ${response.status}`
     );
   }
 
@@ -22,7 +25,10 @@ async function generateBrat(text) {
     const body = await response.text();
 
     throw new Error(
-      `Brat API tidak mengembalikan gambar: ${body.slice(0, 200)}`
+      `Brat API tidak mengembalikan gambar: ${body.slice(
+        0,
+        200
+      )}`
     );
   }
 
@@ -37,9 +43,13 @@ export default {
   commands: [
     {
       name: "brat",
+
       aliases: [],
+
       category: "maker",
-      description: "Membuat sticker Brat dari teks.",
+
+      description:
+        "Membuat sticker Brat dari teks.",
 
       async execute({
         args,
@@ -47,7 +57,8 @@ export default {
         jid,
         reply
       }) {
-        const text = args.join(" ").trim();
+        const text =
+          args.join(" ").trim();
 
         if (!text) {
           await reply(
@@ -58,14 +69,19 @@ export default {
         }
 
         try {
+          // 1. Ambil GAMBAR dari API
           const imageBuffer =
-            await generateBrat(text);
+            await generateBratImage(text);
 
+          // 2. Ubah gambar menjadi STICKER
+          // menggunakan Sticker Engine NovaBot
           const sticker =
             await createStickerFromBuffer(
-              imageBuffer
+              imageBuffer,
+              "png"
             );
 
+          // 3. Kirim sebagai sticker WhatsApp
           await socket.sendMessage(jid, {
             sticker
           });
