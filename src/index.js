@@ -2,6 +2,7 @@ import config from "./config/index.js";
 import { logger } from "./core/logger.js";
 import { connectWhatsApp } from "./core/connection.js";
 import { loadCommands } from "./core/command-loader.js";
+import { loadPlugins } from "./core/plugin-loader.js";
 import { initStorage } from "./storage/index.js";
 
 async function bootstrap() {
@@ -12,13 +13,13 @@ async function bootstrap() {
 
   await initStorage();
   await loadCommands();
+  await loadPlugins();
   await connectWhatsApp();
 }
 
 function shutdown(signal) {
   logger.info(`${signal} received.`);
-  logger.info("Shutting down NovaBot...");
-
+  logger.info("Shutting down NovaBot.");
   process.exit(0);
 }
 
