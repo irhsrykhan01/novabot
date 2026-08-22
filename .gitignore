@@ -146,4 +146,5 @@ node_modules/
 .env
 session/
 logs/
+data/
 *.log
