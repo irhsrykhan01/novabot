@@ -11,33 +11,21 @@ function getSource(message) {
   const msg = message.message;
 
   if (msg?.imageMessage) {
-    return {
-      data: msg.imageMessage,
-      type: "image"
-    };
+    return { data: msg.imageMessage, type: "image" };
   }
 
   if (msg?.videoMessage) {
-    return {
-      data: msg.videoMessage,
-      type: "video"
-    };
+    return { data: msg.videoMessage, type: "video" };
   }
 
   const quoted = msg?.extendedTextMessage?.contextInfo?.quotedMessage;
 
   if (quoted?.imageMessage) {
-    return {
-      data: quoted.imageMessage,
-      type: "image"
-    };
+    return { data: quoted.imageMessage, type: "image" };
   }
 
   if (quoted?.videoMessage) {
-    return {
-      data: quoted.videoMessage,
-      type: "video"
-    };
+    return { data: quoted.videoMessage, type: "video" };
   }
 
   return null;
@@ -82,9 +70,7 @@ export default {
         try {
           input = await downloadMedia(source);
         } catch (error) {
-          return reply(
-            `Media gagal diunduh: ${error.message}`
-          );
+          return reply(`Media gagal diunduh: ${error.message}`);
         }
 
         const dir = await fs.mkdtemp(
@@ -96,26 +82,28 @@ export default {
           source.type === "image" ? "input.jpg" : "input.mp4"
         );
 
-        const outputPath = path.join(
-          dir,
-          "sticker.webp"
-        );
+        const outputPath = path.join(dir, "sticker.webp");
 
         try {
           await fs.writeFile(inputPath, input);
+
+          const filter =
+            "scale=512:512:force_original_aspect_ratio=decrease," +
+            "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000";
 
           await exec("ffmpeg", [
             "-y",
             "-i",
             inputPath,
             "-vf",
-            "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=transparent",
+            filter,
             "-c:v",
             "libwebp",
             "-quality",
             "80",
             "-loop",
             "0",
+            "-an",
             outputPath
           ]);
 
@@ -125,9 +113,7 @@ export default {
             sticker
           });
         } catch (error) {
-          await reply(
-            `Sticker gagal dibuat: ${error.message}`
-          );
+          await reply(`Sticker gagal dibuat: ${error.message}`);
         } finally {
           await fs.rm(dir, {
             recursive: true,
