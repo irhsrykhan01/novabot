@@ -2,10 +2,6 @@ import { createStickerFromBuffer } from "../../media/sticker.js";
 
 const BRAT_API = "https://api.depay.id/brat";
 
-function getText(context) {
-  return context?.args?.join(" ").trim() || "";
-}
-
 async function fetchBratImage(text) {
   const url =
     `${BRAT_API}?text=${encodeURIComponent(text)}`;
@@ -31,11 +27,16 @@ async function fetchBratImage(text) {
     );
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const arrayBuffer =
+    await response.arrayBuffer();
+
+  const buffer =
+    Buffer.from(arrayBuffer);
 
   if (buffer.length === 0) {
-    throw new Error("Brat API mengembalikan gambar kosong.");
+    throw new Error(
+      "Brat API mengembalikan gambar kosong."
+    );
   }
 
   return buffer;
@@ -44,43 +45,74 @@ async function fetchBratImage(text) {
 export default {
   name: "brat",
 
-  aliases: [],
+  commands: [
+    {
+      name: "brat",
 
-  category: "generator",
+      aliases: [
+        "br"
+      ],
 
-  description: "Membuat sticker Brat dari teks.",
+      category: "generator",
 
-  usage: ".brat <teks>",
+      description:
+        "Membuat sticker Brat dari teks.",
 
-  async execute(context) {
-    const text = getText(context);
+      usage:
+        ".brat <teks>",
 
-    if (!text) {
-      return context.reply(
-        "Contoh: .brat halo dunia"
-      );
-    }
+      async execute({
+        args,
+        socket,
+        jid,
+        reply
+      }) {
+        const text =
+          args
+            ?.join(" ")
+            .trim() || "";
 
-    try {
-      const imageBuffer =
-        await fetchBratImage(text);
+        if (!text) {
+          await reply(
+            "Contoh: .brat halo dunia"
+          );
 
-      const sticker =
-        await createStickerFromBuffer(
-          imageBuffer,
-          "png"
-        );
-
-      await context.socket.sendMessage(
-        context.jid,
-        {
-          sticker
+          return;
         }
-      );
-    } catch (error) {
-      throw new Error(
-        `Brat gagal: ${error.message}`
-      );
+
+        try {
+          const imageBuffer =
+            await fetchBratImage(
+              text
+            );
+
+          /*
+           * Gunakan engine sticker NovaBot
+           * yang sama dengan .sticker.
+           *
+           * Jadi hasil Brat otomatis mendapatkan
+           * pack + author dari setpack.
+           */
+          const sticker =
+            await createStickerFromBuffer(
+              imageBuffer,
+              "png"
+            );
+
+          await socket.sendMessage(
+            jid,
+            {
+              sticker
+            }
+          );
+        } catch (error) {
+          await reply(
+            `Brat gagal dibuat: ${error.message}`
+          );
+
+          throw error;
+        }
+      }
     }
-  }
+  ]
 };
