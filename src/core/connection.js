@@ -5,7 +5,9 @@ import makeWASocket, {
 
 import qrcode from "qrcode-terminal";
 
+import config from "../config/index.js";
 import { logger } from "./logger.js";
+import { handleCommand } from "./command-handler.js";
 
 const SESSION_PATH = "./session/baileys";
 
@@ -37,9 +39,15 @@ export async function connectWhatsApp() {
 
     sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("connection.update", handleConnectionUpdate);
+    sock.ev.on(
+      "connection.update",
+      handleConnectionUpdate
+    );
 
-    sock.ev.on("messages.upsert", handleMessages);
+    sock.ev.on(
+      "messages.upsert",
+      handleMessages
+    );
 
     isConnecting = false;
 
@@ -64,6 +72,7 @@ async function handleConnectionUpdate(update) {
 
   if (qr) {
     logger.info("QR Code received.");
+
     console.log("");
     console.log("Scan this QR Code with WhatsApp:");
     console.log("");
@@ -141,7 +150,7 @@ function scheduleReconnect() {
   }, 3000);
 }
 
-function handleMessages(event) {
+async function handleMessages(event) {
   if (event.type !== "notify") {
     return;
   }
@@ -151,7 +160,8 @@ function handleMessages(event) {
       continue;
     }
 
-    const remoteJid = message.key?.remoteJid;
+    const remoteJid =
+      message.key?.remoteJid;
 
     if (!remoteJid) {
       continue;
@@ -159,6 +169,12 @@ function handleMessages(event) {
 
     logger.debug(
       `Message received from ${remoteJid}`
+    );
+
+    await handleCommand(
+      message,
+      config.command.prefix,
+      socket
     );
   }
 }
