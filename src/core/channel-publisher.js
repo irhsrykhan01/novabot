@@ -5,7 +5,7 @@ import {
 } from "@whiskeysockets/baileys";
 
 const CHANNEL_SUFFIX = "@newsletter";
-const SEND_TIMEOUT_MS = 45_000;
+const SEND_TIMEOUT_MS = 45000;
 
 const channelQueues = new Map();
 
@@ -13,6 +13,24 @@ function isChannelJid(jid) {
   return (
     typeof jid === "string" &&
     jid.endsWith(CHANNEL_SUFFIX)
+  );
+}
+
+function getMessageType(content) {
+  if (!content) return null;
+
+  try {
+    return getContentType(content);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeContent(content) {
+  return (
+    normalizeMessageContent(content) ||
+    content ||
+    null
   );
 }
 
@@ -28,17 +46,6 @@ function normalizeUserId(jid) {
 }
 
 export function getUserId(message) {
-  /*
-   * Di private chat:
-   * remoteJid = user.
-   *
-   * Di group:
-   * participant = user.
-   *
-   * Di Channel:
-   * remoteJid = channel.
-   * participant dipakai kalau tersedia.
-   */
   const participant =
     normalizeUserId(
       message?.key?.participant
@@ -67,48 +74,29 @@ export function getUserId(message) {
   return null;
 }
 
-function getMessageType(content) {
-  if (!content) {
-    return null;
-  }
-
-  try {
-    return getContentType(content);
-  } catch {
-    return null;
-  }
-}
-
 function getContextInfo(content) {
-  const type =
-    getMessageType(content);
+  const normalized =
+    normalizeContent(content);
 
-  if (!type) {
-    return null;
-  }
+  const type =
+    getMessageType(normalized);
+
+  if (!type) return null;
 
   return (
-    content?.[type]?.contextInfo ||
+    normalized?.[type]?.contextInfo ||
     null
   );
 }
 
-function findNewsletterJid(
-  content
-) {
-  if (!content) {
-    return null;
-  }
+function findNewsletterJid(content) {
+  if (!content) return null;
 
   const normalized =
-    normalizeMessageContent(
-      content
-    ) || content;
+    normalizeContent(content);
 
   const context =
-    getContextInfo(
-      normalized
-    );
+    getContextInfo(normalized);
 
   const forwardedJid =
     context
@@ -116,50 +104,38 @@ function findNewsletterJid(
       ?.newsletterJid;
 
   if (
-    isChannelJid(
-      forwardedJid
-    )
+    isChannelJid(forwardedJid)
   ) {
     return forwardedJid;
   }
 
-  const contextRemoteJid =
+  const remoteJid =
     context?.remoteJid;
 
-  if (
-    isChannelJid(
-      contextRemoteJid
-    )
-  ) {
-    return contextRemoteJid;
+  if (isChannelJid(remoteJid)) {
+    return remoteJid;
   }
 
   const type =
-    getMessageType(
-      normalized
-    );
+    getMessageType(normalized);
 
-  if (!type) {
-    return null;
-  }
+  if (!type) return null;
 
-  const nested =
+  const quoted =
     normalized?.[type]
       ?.contextInfo
       ?.quotedMessage;
 
-  if (nested) {
+  if (quoted) {
     return findNewsletterJid(
-      nested
+      quoted
     );
   }
 
   return null;
 }
 
-export function findChannelJid(
-  message
-) {
+export function findChannelJid(message) {
   const direct =
     message?.key?.remoteJid;
 
@@ -167,16 +143,9 @@ export function findChannelJid(
     return direct;
   }
 
-  const fromMessage =
-    findNewsletterJid(
-      message?.message
-    );
-
-  if (fromMessage) {
-    return fromMessage;
-  }
-
-  return null;
+  return findNewsletterJid(
+    message?.message
+  );
 }
 
 export async function inspectChannel(
@@ -184,9 +153,7 @@ export async function inspectChannel(
   channelJid
 ) {
   if (
-    !isChannelJid(
-      channelJid
-    )
+    !isChannelJid(channelJid)
   ) {
     throw new Error(
       "Target bukan WhatsApp Channel."
@@ -199,7 +166,7 @@ export async function inspectChannel(
       "function"
   ) {
     throw new Error(
-      "Baileys pada versi ini tidak menyediakan newsletterMetadata()."
+      "Baileys tidak menyediakan newsletterMetadata()."
     );
   }
 
@@ -216,23 +183,15 @@ export async function inspectChannel(
   }
 
   const role =
-    metadata
-      ?.viewer_metadata
-      ?.role ||
-    metadata
-      ?.viewerMetadata
-      ?.role ||
+    metadata?.viewer_metadata?.role ||
+    metadata?.viewerMetadata?.role ||
     metadata?.role ||
     null;
 
   const name =
     metadata?.name ||
-    metadata
-      ?.thread_metadata
-      ?.name ||
-    metadata
-      ?.threadMetadata
-      ?.name ||
+    metadata?.thread_metadata?.name ||
+    metadata?.threadMetadata?.name ||
     "WhatsApp Channel";
 
   return {
@@ -253,14 +212,21 @@ export async function validateChannelAdmin(
       channelJid
     );
 
+  const role =
+    String(
+      channel.role || ""
+    ).toUpperCase();
+
   if (
-    channel.role !== "ADMIN" &&
-    channel.role !== "OWNER"
+    role !== "ADMIN" &&
+    role !== "OWNER"
   ) {
     throw new Error(
       [
-        "NovaBot tidak memiliki izin posting di Channel ini.",
-        `Role bot: ${channel.role || "UNKNOWN"}`
+        "NovaBot bukan admin Channel ini.",
+        `Role bot: ${channel.role || "UNKNOWN"}`,
+        "",
+        "Jadikan nomor bot sebagai admin Channel terlebih dahulu."
       ].join("\n")
     );
   }
@@ -268,27 +234,24 @@ export async function validateChannelAdmin(
   return channel;
 }
 
-export async function getUserChannel(
+export function getUserChannel(
   storage,
   userId
 ) {
-  if (!userId) {
+  if (!storage || !userId) {
     return null;
   }
 
   const user =
-    storage.getUser(
-      userId
-    );
+    storage.getUser(userId);
 
   const channel =
     user?.upchChannel;
 
   if (
-    !channel?.jid ||
-    !isChannelJid(
-      channel.jid
-    )
+    !channel ||
+    !channel.jid ||
+    !isChannelJid(channel.jid)
   ) {
     return null;
   }
@@ -296,14 +259,29 @@ export async function getUserChannel(
   return channel;
 }
 
-export async function setUserChannel(
+export function setUserChannel(
   storage,
   userId,
   channel
 ) {
+  if (!storage) {
+    throw new Error(
+      "Storage tidak tersedia."
+    );
+  }
+
   if (!userId) {
     throw new Error(
       "User ID tidak tersedia."
+    );
+  }
+
+  if (
+    !channel ||
+    !isChannelJid(channel.jid)
+  ) {
+    throw new Error(
+      "JID Channel tidak valid."
     );
   }
 
@@ -325,67 +303,50 @@ export async function setUserChannel(
   );
 }
 
-function getQuotedMessage(
-  message
-) {
+function getQuotedMessage(message) {
   const normalized =
-    normalizeMessageContent(
+    normalizeContent(
       message?.message
-    ) ||
-    message?.message;
+    );
 
   if (!normalized) {
     return null;
   }
 
   const type =
-    getMessageType(
-      normalized
-    );
+    getMessageType(normalized);
 
   if (!type) {
     return null;
   }
 
-  const quoted =
+  return (
     normalized?.[type]
       ?.contextInfo
-      ?.quotedMessage;
-
-  return quoted || null;
+      ?.quotedMessage ||
+    null
+  );
 }
 
-export function getSourceMessage(
-  message
-) {
+export function getSourceMessage(message) {
   const quoted =
-    getQuotedMessage(
-      message
-    );
+    getQuotedMessage(message);
 
   if (quoted) {
     return quoted;
   }
 
-  /*
-   * Mendukung:
-   * foto/video/audio/document/sticker
-   * dengan caption .upch langsung.
-   */
   const normalized =
-    normalizeMessageContent(
+    normalizeContent(
       message?.message
-    ) ||
-    message?.message;
+    );
 
   if (!normalized) {
     return null;
   }
 
   const type =
-    getMessageType(
-      normalized
-    );
+    getMessageType(normalized);
 
   if (
     type === "imageMessage" ||
@@ -418,10 +379,10 @@ async function downloadMediaBuffer(
 
   const chunks = [];
 
-  for await (
-    const chunk of stream
-  ) {
-    chunks.push(chunk);
+  for await (const chunk of stream) {
+    chunks.push(
+      Buffer.from(chunk)
+    );
   }
 
   const buffer =
@@ -436,50 +397,42 @@ async function downloadMediaBuffer(
   return buffer;
 }
 
-function getTextPayload(
-  source
-) {
+function getTextPayload(source) {
   const normalized =
-    normalizeMessageContent(
-      source
-    ) || source;
+    normalizeContent(source);
+
+  if (!normalized) {
+    return null;
+  }
 
   if (
-    typeof normalized
-      ?.conversation ===
+    typeof normalized.conversation ===
     "string"
   ) {
     return {
-      text:
-        normalized.conversation
+      text: normalized.conversation
     };
   }
 
-  const extendedText =
+  const text =
     normalized
       ?.extendedTextMessage
       ?.text;
 
   if (
-    typeof extendedText ===
-    "string"
+    typeof text === "string"
   ) {
     return {
-      text:
-        extendedText
+      text
     };
   }
 
   return null;
 }
 
-async function buildPayload(
-  source
-) {
+async function buildPayload(source) {
   const normalized =
-    normalizeMessageContent(
-      source
-    ) || source;
+    normalizeContent(source);
 
   if (!normalized) {
     throw new Error(
@@ -487,21 +440,17 @@ async function buildPayload(
     );
   }
 
-  const textPayload =
-    getTextPayload(
-      normalized
-    );
+  const text =
+    getTextPayload(normalized);
 
-  if (textPayload) {
+  if (text) {
     return {
       type: "text",
-      content: textPayload
+      content: text
     };
   }
 
-  if (
-    normalized.imageMessage
-  ) {
+  if (normalized.imageMessage) {
     const media =
       normalized.imageMessage;
 
@@ -528,9 +477,7 @@ async function buildPayload(
     };
   }
 
-  if (
-    normalized.videoMessage
-  ) {
+  if (normalized.videoMessage) {
     const media =
       normalized.videoMessage;
 
@@ -562,9 +509,7 @@ async function buildPayload(
     };
   }
 
-  if (
-    normalized.audioMessage
-  ) {
+  if (normalized.audioMessage) {
     const media =
       normalized.audioMessage;
 
@@ -581,15 +526,12 @@ async function buildPayload(
         mimetype:
           media.mimetype ||
           "audio/ogg; codecs=opus",
-        ptt:
-          Boolean(media.ptt)
+        ptt: Boolean(media.ptt)
       }
     };
   }
 
-  if (
-    normalized.documentMessage
-  ) {
+  if (normalized.documentMessage) {
     const media =
       normalized.documentMessage;
 
@@ -619,9 +561,7 @@ async function buildPayload(
     };
   }
 
-  if (
-    normalized.stickerMessage
-  ) {
+  if (normalized.stickerMessage) {
     const media =
       normalized.stickerMessage;
 
@@ -648,28 +588,32 @@ function withTimeout(
   promise,
   timeoutMs
 ) {
-  return Promise.race([
-    promise,
+  let timer;
 
+  const timeout =
     new Promise(
       (_, reject) => {
-        const timer =
-          setTimeout(() => {
+        timer = setTimeout(
+          () => {
             reject(
               new Error(
-                `Pengiriman melebihi batas waktu ${Math.round(
+                `Pengiriman timeout setelah ${Math.round(
                   timeoutMs / 1000
                 )} detik.`
               )
             );
-          }, timeoutMs);
-
-        promise.finally(
-          () => clearTimeout(timer)
+          },
+          timeoutMs
         );
       }
-    )
-  ]);
+    );
+
+  return Promise.race([
+    promise,
+    timeout
+  ]).finally(() => {
+    clearTimeout(timer);
+  });
 }
 
 function enqueueChannelSend(
@@ -723,9 +667,7 @@ export async function publishMessage(
   }
 
   if (
-    !isChannelJid(
-      channelJid
-    )
+    !isChannelJid(channelJid)
   ) {
     throw new Error(
       "Target Channel tidak valid."
@@ -742,4 +684,31 @@ export async function publishMessage(
       channelJid,
       () =>
         withTimeout(
-          socket
+          socket.sendMessage(
+            channelJid,
+            payload.content
+          ),
+          SEND_TIMEOUT_MS
+        )
+    );
+
+  if (
+    !sent ||
+    !sent.key ||
+    !sent.key.id
+  ) {
+    throw new Error(
+      "WhatsApp tidak mengembalikan message ID."
+    );
+  }
+
+  return {
+    messageId:
+      sent.key.id,
+
+    type:
+      payload.type,
+
+    channelJid
+  };
+      }
