@@ -4,6 +4,7 @@ import {
   connectWhatsApp,
   disconnectWhatsApp
 } from "./core/connection.js";
+import { loadCommands } from "./core/command-loader.js";
 
 async function bootstrap() {
   logger.info("Starting NovaBot...");
@@ -11,6 +12,7 @@ async function bootstrap() {
   logger.info(`Bot Name: ${config.bot.name}`);
   logger.info(`Prefix: ${config.command.prefix}`);
 
+  await loadCommands();
   await connectWhatsApp();
 }
 
