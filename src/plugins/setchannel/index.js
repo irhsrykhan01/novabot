@@ -21,46 +21,46 @@ export default {
       category: "tools",
 
       description:
-        "Menyimpan WhatsApp Channel tujuan untuk user.",
+        "Menyimpan Channel WhatsApp untuk user.",
 
       async execute({
         message,
         socket,
-        jid,
         reply
       }) {
         const userId =
-          getUserId(message);
+          getUserId(
+            message
+          );
 
         if (!userId) {
           await reply(
-            "User ID tidak dapat ditentukan."
+            [
+              "❌ User tidak dapat dikenali.",
+              "",
+              "Atur Channel dari chat pribadi dengan bot atau reply pesan Channel yang diteruskan ke chat pribadi."
+            ].join("\n")
           );
 
           return;
         }
 
-        /*
-         * Cara utama:
-         * reply/forward pesan dari Channel
-         * lalu jalankan .setchannel.
-         *
-         * Fallback:
-         * jika event memang berasal dari
-         * @newsletter, gunakan remoteJid.
-         */
         const channelJid =
-          findChannelJid(message);
+          findChannelJid(
+            message
+          );
 
         if (!channelJid) {
           await reply(
             [
-              "Channel belum terdeteksi.",
+              "❌ Channel tidak terdeteksi.",
               "",
-              "Cara paling aman:",
-              "1. Forward pesan dari Channel ke chat ini.",
-              "2. Reply pesan tersebut.",
-              "3. Kirim .setchannel"
+              "Cara yang direkomendasikan:",
+              "1. Forward sebuah postingan dari Channel ke chat pribadi dengan bot.",
+              "2. Reply postingan tersebut.",
+              "3. Kirim .setchannel",
+              "",
+              "Bot akan mendeteksi JID @newsletter secara otomatis."
             ].join("\n")
           );
 
@@ -85,18 +85,21 @@ export default {
               "✅ Channel berhasil disimpan!",
               "",
               `Channel : ${channel.name}`,
-              `JID     : ${channel.jid}`,
               `Role    : ${channel.role}`,
               "",
-              "Sekarang kamu bisa reply pesan apa pun lalu gunakan .upch."
+              "Target ini tersimpan khusus untuk akun kamu.",
+              "",
+              "Sekarang reply pesan apa pun lalu gunakan .upch."
             ].join("\n")
           );
         } catch (error) {
           await reply(
-            `❌ Gagal mengatur Channel: ${error.message}`
+            [
+              "❌ Channel tidak dapat disimpan.",
+              "",
+              error.message
+            ].join("\n")
           );
-
-          throw error;
         }
       }
     }
