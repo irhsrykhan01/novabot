@@ -182,11 +182,27 @@ async function handleMessages(event) {
       `Message received from ${remoteJid}`
     );
 
-    await handleCommand(
-      message,
-      config.command.prefix,
-      socket
+    logger.debug(
+      `Message payload: ${JSON.stringify(
+        Object.keys(message.message || {})
+      )}`
     );
+
+    try {
+      const handled = await handleCommand(
+        message,
+        config.command.prefix,
+        socket
+      );
+
+      logger.debug(
+        `Command handler result: ${handled}`
+      );
+    } catch (error) {
+      logger.error(
+        `Command handler crashed: ${error.message}`
+      );
+    }
   }
 }
 
