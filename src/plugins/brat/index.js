@@ -1,98 +1,102 @@
-import {
-  createStickerFromBuffer
-} from "../../media/sticker.js";
+import { createStickerFromBuffer } from "../media/sticker.js";
 
-const API_URL =
-  "https://depay.cloud/api/generator/brat";
+const BRAT_API =
+  "https://api.depay.id/brat";
 
-async function generateBratImage(text) {
-  const url = new URL(API_URL);
+function getText(context) {
+  return (
+    context?.args?.join(" ").trim() ||
+    ""
+  );
+}
 
-  url.searchParams.set("text", text);
+async function fetchBratImage(text) {
+  const url =
+    `${BRAT_API}?text=${encodeURIComponent(text)}`;
 
-  const response = await fetch(url);
+  const response =
+    await fetch(url);
 
   if (!response.ok) {
     throw new Error(
-      `Brat API error: HTTP ${response.status}`
+      `Brat API HTTP ${response.status}`
     );
   }
 
   const contentType =
-    response.headers.get("content-type") || "";
+    response.headers.get(
+      "content-type"
+    ) || "";
 
-  if (!contentType.startsWith("image/")) {
-    const body = await response.text();
+  if (
+    !contentType.includes("image")
+  ) {
+    const body =
+      await response.text();
 
     throw new Error(
-      `Brat API tidak mengembalikan gambar: ${body.slice(
-        0,
-        200
-      )}`
+      `Brat API tidak mengembalikan gambar. Content-Type: ${contentType}. Response: ${body.slice(0, 200)}`
     );
   }
 
-  return Buffer.from(
-    await response.arrayBuffer()
-  );
+  const arrayBuffer =
+    await response.arrayBuffer();
+
+  const buffer =
+    Buffer.from(arrayBuffer);
+
+  if (buffer.length === 0) {
+    throw new Error(
+      "Brat API mengembalikan gambar kosong."
+    );
+  }
+
+  return buffer;
 }
 
 export default {
   name: "brat",
 
-  commands: [
-    {
-      name: "brat",
+  aliases: [],
 
-      aliases: [],
+  category: "generator",
 
-      category: "maker",
+  description:
+    "Membuat sticker Brat dari teks.",
 
-      description:
-        "Membuat sticker Brat dari teks.",
+  usage:
+    ".brat <teks>",
 
-      async execute({
-        args,
-        socket,
-        jid,
-        reply
-      }) {
-        const text =
-          args.join(" ").trim();
+  async execute(context) {
+    const text =
+      getText(context);
 
-        if (!text) {
-          await reply(
-            "Contoh: .brat halo dunia"
-          );
-
-          return;
-        }
-
-        try {
-          // 1. Ambil GAMBAR dari API
-          const imageBuffer =
-            await generateBratImage(text);
-
-          // 2. Ubah gambar menjadi STICKER
-          // menggunakan Sticker Engine NovaBot
-          const sticker =
-            await createStickerFromBuffer(
-              imageBuffer,
-              "png"
-            );
-
-          // 3. Kirim sebagai sticker WhatsApp
-          await socket.sendMessage(jid, {
-            sticker
-          });
-        } catch (error) {
-          await reply(
-            `Brat gagal dibuat: ${error.message}`
-          );
-
-          throw error;
-        }
-      }
+    if (!text) {
+      return context.reply(
+        "Contoh: .brat halo dunia"
+      );
     }
-  ]
+
+    try {
+      const imageBuffer =
+        await fetchBratImage(text);
+
+      const sticker =
+        await createStickerFromBuffer(
+          imageBuffer,
+          "png"
+        );
+
+      await context.socket.sendMessage(
+        context.jid,
+        {
+          sticker
+        }
+      );
+    } catch (error) {
+      throw new Error(
+        `Brat gagal: ${error.message}`
+      );
+    }
+  }
 };
