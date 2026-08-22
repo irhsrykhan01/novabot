@@ -21,20 +21,21 @@ export default {
       category: "tools",
 
       description:
-        "Mengirim ulang pesan ke Channel yang sudah disimpan.",
+        "Mengirim pesan ke Channel yang tersimpan.",
 
       async execute({
         message,
         socket,
-        jid,
         reply
       }) {
         const userId =
-          getUserId(message);
+          getUserId(
+            message
+          );
 
         if (!userId) {
           await reply(
-            "User ID tidak dapat ditentukan."
+            "❌ User tidak dapat dikenali."
           );
 
           return;
@@ -49,9 +50,9 @@ export default {
         if (!channel) {
           await reply(
             [
-              "❌ Kamu belum mempunyai Channel tujuan.",
+              "❌ Belum ada Channel tujuan.",
               "",
-              "Reply atau forward pesan dari Channel yang kamu kelola, lalu gunakan:",
+              "Reply postingan dari Channel lalu gunakan:",
               ".setchannel"
             ].join("\n")
           );
@@ -69,7 +70,7 @@ export default {
             [
               "❌ Tidak ada pesan yang akan di-upload.",
               "",
-              "Reply pesan yang ingin dikirim ke Channel, lalu gunakan:",
+              "Reply pesan yang mau dikirim lalu:",
               ".upch"
             ].join("\n")
           );
@@ -78,17 +79,22 @@ export default {
         }
 
         try {
-          await publishMessage(
-            socket,
-            channel.jid,
-            source
-          );
+          const result =
+            await publishMessage(
+              socket,
+              channel.jid,
+              source
+            );
 
           await reply(
             [
-              "✅ Berhasil dikirim ke Channel!",
+              "✅ Pesan diterima WhatsApp untuk dikirim ke Channel.",
               "",
-              `Channel : ${channel.name}`
+              `Channel : ${channel.name}`,
+              `Tipe    : ${result.type}`,
+              `ID      : ${result.messageId}`,
+              "",
+              "Catatan: ID ini berarti server WhatsApp menerima permintaan pengiriman; tampilan akhir di Channel tetap bergantung pada server/newsletter."
             ].join("\n")
           );
         } catch (error) {
@@ -99,8 +105,6 @@ export default {
               `Penyebab: ${error.message}`
             ].join("\n")
           );
-
-          throw error;
         }
       }
     }
