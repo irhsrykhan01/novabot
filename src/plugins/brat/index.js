@@ -1,21 +1,16 @@
-import { createStickerFromBuffer } from "../media/sticker.js";
+import { createStickerFromBuffer } from "../../media/sticker.js";
 
-const BRAT_API =
-  "https://api.depay.id/brat";
+const BRAT_API = "https://api.depay.id/brat";
 
 function getText(context) {
-  return (
-    context?.args?.join(" ").trim() ||
-    ""
-  );
+  return context?.args?.join(" ").trim() || "";
 }
 
 async function fetchBratImage(text) {
   const url =
     `${BRAT_API}?text=${encodeURIComponent(text)}`;
 
-  const response =
-    await fetch(url);
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(
@@ -24,31 +19,23 @@ async function fetchBratImage(text) {
   }
 
   const contentType =
-    response.headers.get(
-      "content-type"
-    ) || "";
+    response.headers.get("content-type") || "";
 
-  if (
-    !contentType.includes("image")
-  ) {
-    const body =
-      await response.text();
+  if (!contentType.includes("image")) {
+    const body = await response.text();
 
     throw new Error(
-      `Brat API tidak mengembalikan gambar. Content-Type: ${contentType}. Response: ${body.slice(0, 200)}`
+      `Brat API tidak mengembalikan gambar. ` +
+      `Content-Type: ${contentType}. ` +
+      `Response: ${body.slice(0, 200)}`
     );
   }
 
-  const arrayBuffer =
-    await response.arrayBuffer();
-
-  const buffer =
-    Buffer.from(arrayBuffer);
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
 
   if (buffer.length === 0) {
-    throw new Error(
-      "Brat API mengembalikan gambar kosong."
-    );
+    throw new Error("Brat API mengembalikan gambar kosong.");
   }
 
   return buffer;
@@ -61,15 +48,12 @@ export default {
 
   category: "generator",
 
-  description:
-    "Membuat sticker Brat dari teks.",
+  description: "Membuat sticker Brat dari teks.",
 
-  usage:
-    ".brat <teks>",
+  usage: ".brat <teks>",
 
   async execute(context) {
-    const text =
-      getText(context);
+    const text = getText(context);
 
     if (!text) {
       return context.reply(
