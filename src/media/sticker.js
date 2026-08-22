@@ -3,13 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { exec as execCb } from "node:child_process";
 import { promisify } from "node:util";
-import { TextEncoder } from "node:util";
 
 import {
   downloadContentFromMessage
 } from "@whiskeysockets/baileys";
 
-import { Image } from "node-webpmux";
+import WebPMux from "node-webpmux";
 
 import {
   getStickerSettings
@@ -17,7 +16,16 @@ import {
 
 const exec = promisify(execCb);
 
-const STICKER_ID = "com.novabot.sticker";
+const Image = WebPMux.Image;
+
+const STICKER_ID =
+  "com.novabot.sticker";
+
+/*
+ * ------------------------------------------------------------
+ * MESSAGE MEDIA
+ * ------------------------------------------------------------
+ */
 
 function getMessageMedia(message) {
   const msg = message?.message;
@@ -59,7 +67,16 @@ function getMessageMedia(message) {
   return null;
 }
 
-async function downloadMedia(media, type) {
+/*
+ * ------------------------------------------------------------
+ * DOWNLOAD MEDIA
+ * ------------------------------------------------------------
+ */
+
+async function downloadMedia(
+  media,
+  type
+) {
   const stream =
     await downloadContentFromMessage(
       media,
@@ -75,13 +92,22 @@ async function downloadMedia(media, type) {
   return Buffer.concat(chunks);
 }
 
-async function runFFmpeg(command) {
+/*
+ * ------------------------------------------------------------
+ * FFMPEG
+ * ------------------------------------------------------------
+ */
+
+async function runFFmpeg(
+  command
+) {
   const {
     stdout,
     stderr
   } = await exec(command, {
     timeout: 30000,
-    maxBuffer: 20 * 1024 * 1024
+    maxBuffer:
+      20 * 1024 * 1024
   });
 
   return {
@@ -90,11 +116,21 @@ async function runFFmpeg(command) {
   };
 }
 
-async function imageToSticker(input, output) {
+/*
+ * ------------------------------------------------------------
+ * IMAGE → WEBP
+ * ------------------------------------------------------------
+ */
+
+async function imageToSticker(
+  input,
+  output
+) {
   await runFFmpeg(
     [
       "ffmpeg",
       "-y",
+
       "-i",
       `"${input}"`,
 
@@ -115,11 +151,21 @@ async function imageToSticker(input, output) {
   );
 }
 
-async function videoToSticker(input, output) {
+/*
+ * ------------------------------------------------------------
+ * VIDEO → ANIMATED WEBP
+ * ------------------------------------------------------------
+ */
+
+async function videoToSticker(
+  input,
+  output
+) {
   await runFFmpeg(
     [
       "ffmpeg",
       "-y",
+
       "-i",
       `"${input}"`,
 
@@ -146,18 +192,17 @@ async function videoToSticker(input, output) {
 }
 
 /*
- * Build EXIF exactly following the structure
- * used by wa-sticker-formatter.
- *
- * Reference implementation:
- * wa-sticker-formatter/src/internal/Metadata/Exif.ts
+ * ------------------------------------------------------------
+ * BUILD WHATSAPP STICKER EXIF
+ * ------------------------------------------------------------
  */
+
 function buildStickerExif({
   pack,
   author,
   emojis = ["✨"]
 }) {
-  const data = JSON.stringify({
+  const metadata = {
     emojis,
 
     "sticker-pack-id":
@@ -168,58 +213,82 @@ function buildStickerExif({
 
     "sticker-pack-publisher":
       author
-  });
+  };
 
-  const exif = Buffer.concat([
+  const json =
+    JSON.stringify(metadata);
+
+  const jsonBuffer =
+    Buffer.from(
+      json,
+      "utf8"
+    );
+
+  /*
+   * Same EXIF header structure used
+   * by wa-sticker-formatter.
+   */
+
+  const header =
     Buffer.from([
       0x49,
       0x49,
       0x2a,
       0x00,
+
       0x08,
       0x00,
       0x00,
       0x00,
+
       0x01,
       0x00,
+
       0x41,
       0x57,
+
       0x07,
       0x00,
+
       0x00,
       0x00,
+
       0x00,
       0x00,
+
       0x16,
       0x00,
       0x00,
       0x00
-    ]),
+    ]);
 
-    Buffer.from(
-      data,
-      "utf8"
-    )
-  ]);
+  const exif =
+    Buffer.concat([
+      header,
+      jsonBuffer
+    ]);
 
   /*
+   * JSON byte length.
+   *
    * IMPORTANT:
-   * wa-sticker-formatter writes the UTF-8
-   * byte length at offset 14 using 4 bytes.
+   * UTF-8 byte length, not JS string length.
    */
-  const dataLength =
-    new TextEncoder()
-      .encode(data)
-      .length;
 
   exif.writeUIntLE(
-    dataLength,
+    jsonBuffer.length,
     14,
     4
   );
 
   return exif;
 }
+
+/*
+ * ------------------------------------------------------------
+ * ADD METADATA TO WEBP
+ * ------------------------------------------------------------
+ */
 
 async function addStickerMetadata(
   webpBuffer
@@ -245,28 +314,50 @@ async function addStickerMetadata(
       author
     });
 
+  if (
+    !Image ||
+    typeof Image !== "function"
+  ) {
+    throw new Error(
+      "node-webpmux Image API tidak tersedia pada versi yang terpasang."
+    );
+  }
+
   const image =
     new Image();
 
   /*
-   * Load the already-valid WebP produced
+   * Load valid WebP generated
    * by FFmpeg.
    */
+
   await image.load(
     webpBuffer
   );
 
   /*
-   * Let node-webpmux handle the WebP
-   * EXIF chunk itself.
+   * Let node-webpmux handle
+   * the EXIF WebP chunk.
    */
-  image.exif = exif;
+
+  image.exif =
+    exif;
 
   /*
-   * save(null) returns a new Buffer.
+   * null = return Buffer
+   * instead of saving to file.
    */
-  return await image.save(null);
+
+  return await image.save(
+    null
+  );
 }
+
+/*
+ * ------------------------------------------------------------
+ * BUFFER → STICKER
+ * ------------------------------------------------------------
+ */
 
 async function convertBufferToSticker(
   buffer,
@@ -321,6 +412,12 @@ async function convertBufferToSticker(
     );
   }
 }
+
+/*
+ * ------------------------------------------------------------
+ * CREATE STICKER
+ * ------------------------------------------------------------
+ */
 
 export async function createSticker(
   message
@@ -401,6 +498,12 @@ export async function createSticker(
   }
 }
 
+/*
+ * ------------------------------------------------------------
+ * CREATE STICKER FROM BUFFER
+ * ------------------------------------------------------------
+ */
+
 export async function createStickerFromBuffer(
   buffer,
   extension = "png"
@@ -423,6 +526,12 @@ export async function createStickerFromBuffer(
   );
 }
 
+/*
+ * ------------------------------------------------------------
+ * GET METADATA
+ * ------------------------------------------------------------
+ */
+
 export async function getStickerMetadata() {
   const settings =
     await getStickerSettings();
@@ -440,4 +549,4 @@ export async function getStickerMetadata() {
         "Rashii"
       )
   };
-      }
+    }
