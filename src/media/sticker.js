@@ -8,6 +8,10 @@ import {
   downloadContentFromMessage
 } from "@whiskeysockets/baileys";
 
+import {
+  getStickerSettings
+} from "../database/sticker-settings.js";
+
 const exec = promisify(execCb);
 
 function getMessageMedia(message) {
@@ -28,7 +32,9 @@ function getMessageMedia(message) {
   }
 
   const quoted =
-    msg?.extendedTextMessage?.contextInfo?.quotedMessage;
+    msg?.extendedTextMessage
+      ?.contextInfo
+      ?.quotedMessage;
 
   if (quoted?.imageMessage) {
     return {
@@ -47,11 +53,15 @@ function getMessageMedia(message) {
   return null;
 }
 
-async function downloadMedia(media, type) {
-  const stream = await downloadContentFromMessage(
-    media,
-    type
-  );
+async function downloadMedia(
+  media,
+  type
+) {
+  const stream =
+    await downloadContentFromMessage(
+      media,
+      type
+    );
 
   const chunks = [];
 
@@ -63,9 +73,13 @@ async function downloadMedia(media, type) {
 }
 
 async function runFFmpeg(command) {
-  const { stdout, stderr } = await exec(command, {
+  const {
+    stdout,
+    stderr
+  } = await exec(command, {
     timeout: 30000,
-    maxBuffer: 20 * 1024 * 1024
+    maxBuffer:
+      20 * 1024 * 1024
   });
 
   return {
@@ -74,7 +88,10 @@ async function runFFmpeg(command) {
   };
 }
 
-async function imageToSticker(input, output) {
+async function imageToSticker(
+  input,
+  output
+) {
   await runFFmpeg(
     [
       "ffmpeg",
@@ -94,7 +111,10 @@ async function imageToSticker(input, output) {
   );
 }
 
-async function videoToSticker(input, output) {
+async function videoToSticker(
+  input,
+  output
+) {
   await runFFmpeg(
     [
       "ffmpeg",
@@ -121,22 +141,25 @@ async function convertBufferToSticker(
   buffer,
   extension = "png"
 ) {
-  const tempDir = await fs.mkdtemp(
+  const tempDir =
+    await fs.mkdtemp(
+      path.join(
+        os.tmpdir(),
+        "novabot-sticker-"
+      )
+    );
+
+  const inputPath =
     path.join(
-      os.tmpdir(),
-      "novabot-sticker-"
-    )
-  );
+      tempDir,
+      `input.${extension}`
+    );
 
-  const inputPath = path.join(
-    tempDir,
-    `input.${extension}`
-  );
-
-  const outputPath = path.join(
-    tempDir,
-    "sticker.webp"
-  );
+  const outputPath =
+    path.join(
+      tempDir,
+      "sticker.webp"
+    );
 
   try {
     await fs.writeFile(
@@ -153,10 +176,13 @@ async function convertBufferToSticker(
       outputPath
     );
   } finally {
-    await fs.rm(tempDir, {
-      recursive: true,
-      force: true
-    });
+    await fs.rm(
+      tempDir,
+      {
+        recursive: true,
+        force: true
+      }
+    );
   }
 }
 
@@ -172,24 +198,27 @@ export async function createSticker(
     );
   }
 
-  const tempDir = await fs.mkdtemp(
+  const tempDir =
+    await fs.mkdtemp(
+      path.join(
+        os.tmpdir(),
+        "novabot-sticker-"
+      )
+    );
+
+  const inputPath =
     path.join(
-      os.tmpdir(),
-      "novabot-sticker-"
-    )
-  );
+      tempDir,
+      media.type === "image"
+        ? "input.jpg"
+        : "input.mp4"
+    );
 
-  const inputPath = path.join(
-    tempDir,
-    media.type === "image"
-      ? "input.jpg"
-      : "input.mp4"
-  );
-
-  const outputPath = path.join(
-    tempDir,
-    "sticker.webp"
-  );
+  const outputPath =
+    path.join(
+      tempDir,
+      "sticker.webp"
+    );
 
   try {
     const buffer =
@@ -203,7 +232,9 @@ export async function createSticker(
       buffer
     );
 
-    if (media.type === "image") {
+    if (
+      media.type === "image"
+    ) {
       await imageToSticker(
         inputPath,
         outputPath
@@ -219,10 +250,13 @@ export async function createSticker(
       outputPath
     );
   } finally {
-    await fs.rm(tempDir, {
-      recursive: true,
-      force: true
-    });
+    await fs.rm(
+      tempDir,
+      {
+        recursive: true,
+        force: true
+      }
+    );
   }
 }
 
@@ -246,4 +280,8 @@ export async function createStickerFromBuffer(
     buffer,
     extension
   );
+}
+
+export async function getStickerMetadata() {
+  return getStickerSettings();
 }
